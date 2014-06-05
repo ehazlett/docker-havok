@@ -35,5 +35,15 @@ Then run a test container:
 
 Then run `curl foo.local` -- you should see "hello from go-static"
 
+# Options
+
+* `-docker`: TCP or Path to Docker (i.e. `unix:///var/run/docker.sock`)
+* `-etcd-machines`: Comma separated list of etcd hosts (i.e. "http://127.0.0.1:4001")
+* `-host-ip`: The non-local machine IP (i.e. 10.0.0.10 or 192.168.0.10, etc.)
+* `-root-domain`: Domain that will be used for the containers (default: `local`)
+
 # Knowns
-Occaisonally the initial connection to vulcan will timeout.  Simply re-try the request.
+
+* Occaisonally the initial connection to vulcan will timeout.  Simply re-try the request.
+
+* I develop in containers and sometimes I have to restart Havok to get it to see the Docker events.  This does not happen when ran from the host.
