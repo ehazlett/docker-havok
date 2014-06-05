@@ -3,6 +3,10 @@ Havok is a bridge between Docker and [Vulcand](https://github.com/mailgun/vulcan
 
 Using the `-names` option, you can restrict which containers have upstreams created for them thus only exposing the containers you want to Vulcand.  Also, the endpoints are generated in etcd based upon the container name.  This allows you to run Havok on multiple hosts  all pointing to the same etcd cluster and have containers distributed amongst hosts.  When there are no more endpoints available, Havok will remove the host from Vulcand.
 
+# Demo
+
+[![Havok](http://img.youtube.com/vi/jimFfpKZvT0/0.jpg)](http://www.youtube.com/watch?v=jimFfpKZvT0)
+
 ## Assumptions
 Currently there are some assumtions:
 
