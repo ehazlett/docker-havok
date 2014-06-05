@@ -1,0 +1,20 @@
+{
+	"ImportPath": "github.com/ehazlett/havok/havok",
+	"GoVersion": "go1.2.2",
+	"Deps": [
+		{
+			"ImportPath": "github.com/Sirupsen/logrus",
+			"Comment": "v0.2.0-4-gd54646b",
+			"Rev": "d54646ba8e0f9846d5e8faee6d54c7893746e4e1"
+		},
+		{
+			"ImportPath": "github.com/coreos/go-etcd/etcd",
+			"Comment": "v0.2.0-rc1-114-g7745cfd",
+			"Rev": "7745cfd7f8e619cc9e6be450238e6253a57a227f"
+		},
+		{
+			"ImportPath": "github.com/samalba/dockerclient",
+			"Rev": "a78f20b3d74609f682eb0fdcb382d28aa4f7abaf"
+		}
+	]
+}
