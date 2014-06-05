@@ -13,8 +13,8 @@
 			"Rev": "7745cfd7f8e619cc9e6be450238e6253a57a227f"
 		},
 		{
-			"ImportPath": "github.com/samalba/dockerclient",
-			"Rev": "a78f20b3d74609f682eb0fdcb382d28aa4f7abaf"
+			"ImportPath": "github.com/ehazlett/dockerclient",
+			"Rev": "cc5e3dd424af8e9c76ac109becb476a238df8e10"
 		}
 	]
 }
