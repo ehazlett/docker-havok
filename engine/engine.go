@@ -68,6 +68,14 @@ func (e *Engine) eventHandler(event *dockerclient.Event, args ...interface{}) {
 		// for now only get the first port for use with etcd since it would
 		// be crazy to have multiple endpoints with varying ports
 		for _, v := range cnt.NetworkSettings.Ports {
+			// check for exposed ports ; if none, report error
+			if len(v) == 0 {
+				log.WithFields(logrus.Fields{
+					"host":      host,
+					"container": cnt.Id,
+				}).Error("Unable to add endpoint; no ports exposed")
+				return
+			}
 			m := v[0]
 			port := m.HostPort
 			cntConn := fmt.Sprintf("http://%s:%s", e.hostIP, port)
