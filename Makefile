@@ -1,4 +1,9 @@
-all:
+all: build
+
+build:
 	@cd havok ; godep restore ; godep go build
 
-.PHONY: all
+container: build
+	@cd havok ; docker build -t ehazlett/havok .
+
+.PHONY: all build container
