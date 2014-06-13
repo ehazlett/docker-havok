@@ -141,7 +141,7 @@ func (e *Engine) eventHandler(event *dockerclient.Event, args ...interface{}) {
 			}
 			break
 		}
-	case "die":
+	case "die", "destroy":
 		// remove endpoint
 		_, err = e.etcdClient.RawDelete(epKey, true, true)
 		if err != nil {
