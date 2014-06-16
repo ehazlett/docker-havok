@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
 
@@ -13,30 +14,62 @@ var log = logrus.New()
 
 type (
 	Engine struct {
-		dockerUrl    string
-		etcdMachines []string
-		docker       *dockerclient.DockerClient
-		etcdClient   *etcd.Client
-		rootDomain   string
-		hostIP       string
-		nameRegex    string
+		dockerUrl         string
+		etcdMachines      []string
+		docker            *dockerclient.DockerClient
+		etcdClient        *etcd.Client
+		rootDomain        string
+		hostIP            string
+		nameRegex         string
+		rateLimit         int
+		rateLimitBurst    int
+		rateLimitVariable string
+		connLimit         int
+		connLimitVariable string
+	}
+	RateLimit struct {
+		Id         string             `json:"Id"`
+		Priority   int                `json:"Priority"`
+		Type       string             `json:"Type"`
+		Middleware *RequestMiddleware `json:"Middleware"`
+	}
+	RequestMiddleware struct {
+		PeriodSeconds int    `json:"PeriodSeconds"`
+		Burst         int    `json:"Burst"`
+		Variable      string `json:"Variable"`
+		Requests      int    `json:"Requests"`
+	}
+	ConnectionLimit struct {
+		Id         string                `json:"Id"`
+		Priority   int                   `json:"Priority"`
+		Type       string                `json:"Type"`
+		Middleware *ConnectionMiddleware `json:"Middleware"`
+	}
+	ConnectionMiddleware struct {
+		Variable    string `json:"Variable"`
+		Connections int    `json:"Connections"`
 	}
 )
 
-func NewEngine(dockerUrl string, etcdMachines []string, rootDomain string, hostIP string, nameRegex string) *Engine {
+func NewEngine(dockerUrl string, etcdMachines []string, rootDomain string, hostIP string, nameRegex string, rateLimit int, rateLimitVariable string, rateLimitBurst int, connLimit int, connLimitVariable string) *Engine {
 	docker, err := dockerclient.NewDockerClient(dockerUrl)
 	if err != nil {
 		log.Fatalf("Unable to connect to docker: %s", err)
 	}
 	etcdClient := etcd.NewClient(etcdMachines)
 	e := &Engine{
-		dockerUrl:    dockerUrl,
-		etcdMachines: etcdMachines,
-		docker:       docker,
-		etcdClient:   etcdClient,
-		rootDomain:   rootDomain,
-		hostIP:       hostIP,
-		nameRegex:    nameRegex,
+		dockerUrl:         dockerUrl,
+		etcdMachines:      etcdMachines,
+		docker:            docker,
+		etcdClient:        etcdClient,
+		rootDomain:        rootDomain,
+		hostIP:            hostIP,
+		nameRegex:         nameRegex,
+		rateLimit:         rateLimit,
+		rateLimitBurst:    rateLimitBurst,
+		rateLimitVariable: rateLimitVariable,
+		connLimit:         connLimit,
+		connLimitVariable: connLimitVariable,
 	}
 	return e
 }
@@ -129,6 +162,74 @@ func (e *Engine) eventHandler(event *dockerclient.Event, args ...interface{}) {
 				}).Error("Error creating location in etcd")
 				return
 			}
+			// rate limit
+			if e.rateLimit > 0 {
+				locRateLimitKey := fmt.Sprintf("%s/locations/home/middlewares/ratelimit/default", hostKey)
+				cm := &RequestMiddleware{
+					PeriodSeconds: 1,
+					Burst:         e.rateLimitBurst,
+					Variable:      e.rateLimitVariable,
+					Requests:      e.rateLimit,
+				}
+				cl := &RateLimit{
+					Id:         "",
+					Priority:   1,
+					Type:       "ratelimit",
+					Middleware: cm,
+				}
+				b, bErr := json.Marshal(cl)
+				if bErr != nil {
+					log.WithFields(logrus.Fields{
+						"host":  host,
+						"key":   locKey,
+						"error": err,
+					}).Error("Error setting rate limit config in etcd")
+					return
+				}
+				log.Info(string(b))
+				_, err = e.etcdClient.Set(locRateLimitKey, string(b), 0)
+				if err != nil {
+					log.WithFields(logrus.Fields{
+						"host":  host,
+						"key":   locKey,
+						"error": err,
+					}).Error("Error creating location in etcd")
+					return
+				}
+			}
+			// conn limit
+			if e.connLimit > 0 {
+				locConnLimitKey := fmt.Sprintf("%s/locations/home/middlewares/connlimit/default", hostKey)
+				rm := &ConnectionMiddleware{
+					Variable:    e.connLimitVariable,
+					Connections: e.connLimit,
+				}
+				rl := &ConnectionLimit{
+					Id:         "",
+					Priority:   1,
+					Type:       "connlimit",
+					Middleware: rm,
+				}
+				b, bErr := json.Marshal(rl)
+				if bErr != nil {
+					log.WithFields(logrus.Fields{
+						"host":  host,
+						"key":   locKey,
+						"error": err,
+					}).Error("Error setting connection limit config in etcd")
+					return
+				}
+				_, err = e.etcdClient.Set(locConnLimitKey, string(b), 0)
+				if err != nil {
+					log.WithFields(logrus.Fields{
+						"host":  host,
+						"key":   locKey,
+						"error": err,
+					}).Error("Error creating location in etcd")
+					return
+				}
+			}
+			// upstream
 			locUpKey := fmt.Sprintf("%s/locations/home/upstream", hostKey)
 			_, err = e.etcdClient.Set(locUpKey, up, 0)
 			if err != nil {
