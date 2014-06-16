@@ -51,6 +51,4 @@ Then run `curl foo.local` -- you should see "hello from go-static"
 
 # Knowns
 
-* Occaisonally the initial connection to vulcan will timeout.  Simply re-try the request.
-
 * I develop in containers and sometimes I have to restart Havok to get it to see the Docker events.  This does not happen when ran from the host.
