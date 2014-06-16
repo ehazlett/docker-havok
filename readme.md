@@ -28,6 +28,10 @@ Start havok (replace the `1.2.3.4` IP with your non-local machine IP (i.e. 192.1
 
 `docker run --rm -v /var/run/docker.sock:/var/run/docker.sock ehazlett/havok -etcd-machines "http://1.2.3.4:4001" -host-ip 1.2.3.4 -root-domain local`
 
+Start havok with rate and connection limiting
+
+`docker run --rm -v /var/run/docker.sock:/var/run/docker.sock ehazlett/havok -etcd-machines "http://1.2.3.4:4001" -host-ip 1.2.3.4 -root-domain local -rate-limit 10 -conn-limit 5`
+
 Testing:
 Create a host entry in `/etc/hosts`:
 
@@ -43,11 +47,16 @@ Then run `curl foo.local` -- you should see "hello from go-static"
 
 # Options
 
+* `-conn-limit`: Connection limit (default: 0)
+* `-conn-limit-var`: Variable for connection limiting (default: client.ip)
 * `-docker`: TCP or Path to Docker (i.e. `unix:///var/run/docker.sock`)
 * `-etcd-machines`: Comma separated list of etcd hosts (i.e. "http://127.0.0.1:4001")
 * `-host-ip`: The non-local machine IP (i.e. 10.0.0.10 or 192.168.0.10, etc.)
-* `-root-domain`: Domain that will be used for the containers (default: `local`)
 * `-names`: Containers with names matching this regex will have upstreams created in etcd
+* `-rate-limit`: Specify rate limit as requests per second (default: 0)
+* `-rate-limit-burst`: Set burst rate limit (default: 1)
+* `-rate-limit-var`: Variable for rate limiting (default: client.ip)
+* `-root-domain`: Domain that will be used for the containers (default: `local`)
 
 # Knowns
 
