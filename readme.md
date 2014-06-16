@@ -1,5 +1,5 @@
 # Havok
-Havok is a bridge between Docker and [Vulcand](https://github.com/mailgun/vulcand).  It works by listening for Docker events and automatically creating hosts and upstreams in etcd which is then used by Vulcand to serve the app.
+Havok is a bridge between Docker and [Vulcand](https://github.com/mailgun/vulcand).  It works by listening for Docker events and automatically creating hosts and upstreams in etcd which are then used by Vulcand to serve the app.
 
 Using the `-names` option, you can restrict which containers have upstreams created for them thus only exposing the containers you want to Vulcand.  Also, the endpoints are generated in etcd based upon the container name.  This allows you to run Havok on multiple hosts  all pointing to the same etcd cluster and have containers distributed amongst hosts.  When there are no more endpoints available, Havok will remove the host from Vulcand.
 
