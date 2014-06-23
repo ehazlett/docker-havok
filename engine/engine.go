@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/coreos/go-etcd/etcd"
@@ -92,6 +93,13 @@ func (e *Engine) eventHandler(event *dockerclient.Event, args ...interface{}) {
 	}
 	host := fmt.Sprintf("%s.%s", cnt.Config.Hostname, e.rootDomain)
 	hostKey := fmt.Sprintf("/vulcand/hosts/" + host)
+	// check for root level domain container
+	containerHostParts := []string{cnt.Config.Hostname, cnt.Config.Domainname}
+	containerHost := strings.Join(containerHostParts, ".")
+	if containerHost == e.rootDomain {
+		host = containerHost
+		hostKey = fmt.Sprintf("/vulcand/hosts/" + host)
+	}
 	up := fmt.Sprintf("up-%s", host)
 	upKey := fmt.Sprintf("/vulcand/upstreams/%s", up)
 	ep := fmt.Sprintf("%s/endpoints", upKey)
