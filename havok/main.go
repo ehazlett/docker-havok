@@ -25,7 +25,7 @@ var (
 	CONN_LIMIT_VARIABLE      string
 	eng                      *engine.Engine
 	log                      = logrus.New()
-	version                  = "0.3"
+	version                  = "0.4"
 )
 
 func waitForInterrupt() {

@@ -250,8 +250,13 @@ func (e *Engine) eventHandler(event *dockerclient.Event, args ...interface{}) {
 			}
 			break
 		}
-	case "die", "destroy":
-		// remove endpoint
+	case "die", "destroy", "stop":
+		// since die is called upon stop as well, only log if "die"
+		if event.Status == "die" {
+			log.WithFields(logrus.Fields{
+				"host": host,
+			}).Info("Removing endpoint for host")
+		}
 		_, err = e.etcdClient.RawDelete(epKey, true, true)
 		if err != nil {
 			log.WithFields(logrus.Fields{
