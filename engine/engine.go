@@ -20,7 +20,6 @@ type (
 		docker            *dockerclient.DockerClient
 		etcdClient        *etcd.Client
 		rootDomain        string
-		rootSubdomain     string
 		hostIP            string
 		nameRegex         string
 		rateLimit         int
@@ -53,7 +52,7 @@ type (
 	}
 )
 
-func NewEngine(dockerUrl string, etcdMachines []string, rootDomain string, rootSubdomain string, hostIP string, nameRegex string, rateLimit int, rateLimitVariable string, rateLimitBurst int, connLimit int, connLimitVariable string) *Engine {
+func NewEngine(dockerUrl string, etcdMachines []string, rootDomain string, hostIP string, nameRegex string, rateLimit int, rateLimitVariable string, rateLimitBurst int, connLimit int, connLimitVariable string) *Engine {
 	docker, err := dockerclient.NewDockerClient(dockerUrl)
 	if err != nil {
 		log.Fatalf("Unable to connect to docker: %s", err)
@@ -65,7 +64,6 @@ func NewEngine(dockerUrl string, etcdMachines []string, rootDomain string, rootS
 		docker:            docker,
 		etcdClient:        etcdClient,
 		rootDomain:        rootDomain,
-		rootSubdomain:     rootSubdomain,
 		hostIP:            hostIP,
 		nameRegex:         nameRegex,
 		rateLimit:         rateLimit,
@@ -75,194 +73,6 @@ func NewEngine(dockerUrl string, etcdMachines []string, rootDomain string, rootS
 		connLimitVariable: connLimitVariable,
 	}
 	return e
-}
-
-func getHostKey(host string) string {
-	hostKey := fmt.Sprintf("/vulcand/hosts/" + host)
-	return hostKey
-}
-
-func getUpstreamKey(host string) string {
-	up := fmt.Sprintf("up-%s", host)
-	upKey := fmt.Sprintf("/vulcand/upstreams/%s", up)
-	return upKey
-}
-
-func getEndpointKey(name, host string) string {
-	upKey := getUpstreamKey(host)
-	ep := fmt.Sprintf("%s/endpoints", upKey)
-	epKey := fmt.Sprintf("%s/%s", ep, name)
-	return epKey
-}
-
-func (e *Engine) addHost(host string) {
-	hostKey := getHostKey(host)
-	// create key structure in etcd
-	_, er := e.etcdClient.Get(hostKey, false, false)
-	if er != nil {
-		// check for missing key error
-		switch er.(*etcd.EtcdError).ErrorCode {
-		case 100:
-			// key not found ; create
-			_, err := e.etcdClient.CreateDir(hostKey, 0)
-			if err != nil {
-				log.WithFields(logrus.Fields{
-					"host":  host,
-					"key":   hostKey,
-					"error": err,
-				}).Error("Error creating host key in etcd")
-				return
-			}
-		default:
-			log.WithFields(logrus.Fields{
-				"host":  host,
-				"key":   hostKey,
-				"error": er,
-			}).Error("Error checking host key in etcd")
-			return
-		}
-	}
-}
-
-func (e *Engine) addUpstream(host string) {
-	hostKey := getHostKey(host)
-	locUpKey := fmt.Sprintf("%s/locations/home/upstream", hostKey)
-	up := getUpstreamKey(host)
-	_, err := e.etcdClient.Set(locUpKey, up, 0)
-	if err != nil {
-		log.WithFields(logrus.Fields{
-			"host":  host,
-			"error": err,
-		}).Error("Error creating location upstream in etcd")
-		return
-	}
-}
-
-func (e *Engine) addEndpoint(name, host, endpoint string) {
-	epKey := getEndpointKey(name, host)
-	_, err := e.etcdClient.Set(epKey, endpoint, 0)
-	if err != nil {
-		log.WithFields(logrus.Fields{
-			"host":     host,
-			"endpoint": endpoint,
-			"error":    err,
-		}).Error("Error creating endpoint in etcd")
-		return
-	}
-}
-
-func (e *Engine) removeEndpoint(name, host string) {
-	epKey := getEndpointKey(name, host)
-	_, err := e.etcdClient.RawDelete(epKey, true, true)
-	if err != nil {
-		log.WithFields(logrus.Fields{
-			"host":  host,
-			"error": err,
-		}).Error("Error removing endpoint from etcd")
-		return
-	}
-}
-
-func (e *Engine) removeUpstream(host string) {
-	upKey := getUpstreamKey(host)
-	_, err := e.etcdClient.RawDelete(upKey, true, true)
-	if err != nil {
-		log.WithFields(logrus.Fields{
-			"host":  host,
-			"key":   upKey,
-			"error": err,
-		}).Error("Error removing upstream from etcd")
-	}
-}
-
-func (e *Engine) removeHost(host string) {
-	hostKey := getHostKey(host)
-	_, err := e.etcdClient.RawDelete(hostKey, true, true)
-	if err != nil {
-		log.WithFields(logrus.Fields{
-			"host":  host,
-			"key":   hostKey,
-			"error": err,
-		}).Error("Error removing host from etcd")
-	}
-}
-
-func (e *Engine) addLocation(host string) {
-	hostKey := getHostKey(host)
-	locKey := fmt.Sprintf("%s/locations/home/path", hostKey)
-	_, err := e.etcdClient.Set(locKey, "/.*", 0)
-	if err != nil {
-		log.WithFields(logrus.Fields{
-			"host":  host,
-			"key":   locKey,
-			"error": err,
-		}).Error("Error creating location in etcd")
-		return
-	}
-}
-
-func (e *Engine) setRateLimit(host string) {
-	hostKey := getHostKey(host)
-	locRateLimitKey := fmt.Sprintf("%s/locations/home/middlewares/ratelimit/default", hostKey)
-	cm := &RequestMiddleware{
-		PeriodSeconds: 1,
-		Burst:         e.rateLimitBurst,
-		Variable:      e.rateLimitVariable,
-		Requests:      e.rateLimit,
-	}
-	cl := &RateLimit{
-		Id:         "",
-		Priority:   1,
-		Type:       "ratelimit",
-		Middleware: cm,
-	}
-	b, err := json.Marshal(cl)
-	if err != nil {
-		log.WithFields(logrus.Fields{
-			"host":  host,
-			"error": err,
-		}).Error("Error setting rate limit config in etcd")
-		return
-	}
-	_, err = e.etcdClient.Set(locRateLimitKey, string(b), 0)
-	if err != nil {
-		log.WithFields(logrus.Fields{
-			"host":  host,
-			"error": err,
-		}).Error("Error creating location in etcd")
-		return
-	}
-}
-
-func (e *Engine) setConnectionLimit(host string) {
-	hostKey := getHostKey(host)
-	locConnLimitKey := fmt.Sprintf("%s/locations/home/middlewares/connlimit/default", hostKey)
-	rm := &ConnectionMiddleware{
-		Variable:    e.connLimitVariable,
-		Connections: e.connLimit,
-	}
-	rl := &ConnectionLimit{
-		Id:         "",
-		Priority:   1,
-		Type:       "connlimit",
-		Middleware: rm,
-	}
-	b, err := json.Marshal(rl)
-	if err != nil {
-		log.WithFields(logrus.Fields{
-			"host":  host,
-			"error": err,
-		}).Error("Error setting connection limit config in etcd")
-		return
-	}
-	_, err = e.etcdClient.Set(locConnLimitKey, string(b), 0)
-	if err != nil {
-		log.WithFields(logrus.Fields{
-			"host":  host,
-			"error": err,
-		}).Error("Error creating location in etcd")
-		return
-	}
 }
 
 func (e *Engine) eventHandler(event *dockerclient.Event, args ...interface{}) {
@@ -282,82 +92,214 @@ func (e *Engine) eventHandler(event *dockerclient.Event, args ...interface{}) {
 		return
 	}
 	host := fmt.Sprintf("%s.%s", cnt.Config.Hostname, e.rootDomain)
+	hostKey := fmt.Sprintf("/vulcand/hosts/" + host)
 	// check for root level domain container
 	containerHostParts := []string{cnt.Config.Hostname, cnt.Config.Domainname}
 	containerHost := strings.Join(containerHostParts, ".")
-	hosts := []string{host}
 	if containerHost == e.rootDomain {
-		subdomainHost := fmt.Sprintf("%s.%s", e.rootSubdomain, containerHost)
-		h := []string{containerHost, subdomainHost}
-		hosts = h
+		host = containerHost
+		hostKey = fmt.Sprintf("/vulcand/hosts/" + host)
 	}
-	for _, host := range hosts {
-		switch event.Status {
-		case "start":
-			// for now only get the first port for use with etcd since it would
-			// be crazy to have multiple endpoints with varying ports
-			for _, v := range cnt.NetworkSettings.Ports {
-				// check for exposed ports ; if none, report error
-				if len(v) == 0 {
-					log.WithFields(logrus.Fields{
-						"host":      host,
-						"container": cnt.Id,
-					}).Error("Unable to add endpoint; no ports exposed")
-					return
-				}
-				m := v[0]
-				port := m.HostPort
-				cntConn := fmt.Sprintf("http://%s:%s", e.hostIP, port)
+	up := fmt.Sprintf("up-%s", host)
+	upKey := fmt.Sprintf("/vulcand/upstreams/%s", up)
+	ep := fmt.Sprintf("%s/endpoints", upKey)
+	epKey := fmt.Sprintf("%s/%s", ep, name)
+	switch event.Status {
+	case "start":
+		// for now only get the first port for use with etcd since it would
+		// be crazy to have multiple endpoints with varying ports
+		for _, v := range cnt.NetworkSettings.Ports {
+			// check for exposed ports ; if none, report error
+			if len(v) == 0 {
 				log.WithFields(logrus.Fields{
-					"host":     host,
-					"endpoint": cntConn,
-				}).Info("Adding endpoint for host")
-				e.addHost(host)
-				// set endpoint
-				e.addEndpoint(name, host, cntConn)
-				// set location
-				e.addLocation(host)
-				// rate limit
-				if e.rateLimit > 0 {
-					e.setRateLimit(host)
-				}
-				// conn limit
-				if e.connLimit > 0 {
-					e.setConnectionLimit(host)
-				}
-				// upstream
-				e.addUpstream(host)
-				break
-			}
-		case "die", "destroy", "stop":
-			// since die is called upon stop as well, only log if "die"
-			if event.Status == "die" {
-				log.WithFields(logrus.Fields{
-					"host": host,
-				}).Info("Removing endpoint for host")
-			}
-			e.removeEndpoint(name, host)
-			// check for any other endpoints and break if they exist
-			upKey := getUpstreamKey(host)
-			ep := fmt.Sprintf("%s/endpoints", upKey)
-			r, er := e.etcdClient.Get(ep, true, true)
-			if er != nil {
-				log.WithFields(logrus.Fields{
-					"host":  host,
-					"error": er,
-				}).Error("Error checking endpoint from etcd")
+					"host":      host,
+					"container": cnt.Id,
+				}).Error("Unable to add endpoint; no ports exposed")
 				return
 			}
-			// if there are no more nodes, cleanup
-			if len(r.Node.Nodes) == 0 {
-				// if no more endpoints (all are gone) then remove upstream and host
-				e.removeUpstream(host)
-				log.WithFields(logrus.Fields{
-					"host": host,
-				}).Info("Removing host")
-				// remove host
-				e.removeHost(host)
+			m := v[0]
+			port := m.HostPort
+			cntConn := fmt.Sprintf("http://%s:%s", e.hostIP, port)
+			log.WithFields(logrus.Fields{
+				"host":     host,
+				"endpoint": cntConn,
+			}).Info("Adding endpoint for host")
+			// create key structure in etcd
+			_, er := e.etcdClient.Get(hostKey, false, false)
+			if er != nil {
+				// check for missing key error
+				switch er.(*etcd.EtcdError).ErrorCode {
+				case 100:
+					// key not found ; create
+					_, err := e.etcdClient.CreateDir(hostKey, 0)
+					if err != nil {
+						log.WithFields(logrus.Fields{
+							"host":  host,
+							"key":   hostKey,
+							"error": err,
+						}).Error("Error creating host key in etcd")
+						return
+					}
+				default:
+					log.WithFields(logrus.Fields{
+						"host":  host,
+						"key":   hostKey,
+						"error": er,
+					}).Error("Error checking host key in etcd")
+					return
+				}
 			}
+			// set endpoint
+			_, err = e.etcdClient.Set(epKey, cntConn, 0)
+			if err != nil {
+				log.WithFields(logrus.Fields{
+					"host":  host,
+					"key":   upKey,
+					"error": err,
+				}).Error("Error creating endpoint in etcd")
+				return
+			}
+			// set location
+			locKey := fmt.Sprintf("%s/locations/home/path", hostKey)
+			_, err = e.etcdClient.Set(locKey, "/.*", 0)
+			if err != nil {
+				log.WithFields(logrus.Fields{
+					"host":  host,
+					"key":   locKey,
+					"error": err,
+				}).Error("Error creating location in etcd")
+				return
+			}
+			// rate limit
+			if e.rateLimit > 0 {
+				locRateLimitKey := fmt.Sprintf("%s/locations/home/middlewares/ratelimit/default", hostKey)
+				cm := &RequestMiddleware{
+					PeriodSeconds: 1,
+					Burst:         e.rateLimitBurst,
+					Variable:      e.rateLimitVariable,
+					Requests:      e.rateLimit,
+				}
+				cl := &RateLimit{
+					Id:         "",
+					Priority:   1,
+					Type:       "ratelimit",
+					Middleware: cm,
+				}
+				b, bErr := json.Marshal(cl)
+				if bErr != nil {
+					log.WithFields(logrus.Fields{
+						"host":  host,
+						"key":   locKey,
+						"error": err,
+					}).Error("Error setting rate limit config in etcd")
+					return
+				}
+				log.Info(string(b))
+				_, err = e.etcdClient.Set(locRateLimitKey, string(b), 0)
+				if err != nil {
+					log.WithFields(logrus.Fields{
+						"host":  host,
+						"key":   locKey,
+						"error": err,
+					}).Error("Error creating location in etcd")
+					return
+				}
+			}
+			// conn limit
+			if e.connLimit > 0 {
+				locConnLimitKey := fmt.Sprintf("%s/locations/home/middlewares/connlimit/default", hostKey)
+				rm := &ConnectionMiddleware{
+					Variable:    e.connLimitVariable,
+					Connections: e.connLimit,
+				}
+				rl := &ConnectionLimit{
+					Id:         "",
+					Priority:   1,
+					Type:       "connlimit",
+					Middleware: rm,
+				}
+				b, bErr := json.Marshal(rl)
+				if bErr != nil {
+					log.WithFields(logrus.Fields{
+						"host":  host,
+						"key":   locKey,
+						"error": err,
+					}).Error("Error setting connection limit config in etcd")
+					return
+				}
+				_, err = e.etcdClient.Set(locConnLimitKey, string(b), 0)
+				if err != nil {
+					log.WithFields(logrus.Fields{
+						"host":  host,
+						"key":   locKey,
+						"error": err,
+					}).Error("Error creating location in etcd")
+					return
+				}
+			}
+			// upstream
+			locUpKey := fmt.Sprintf("%s/locations/home/upstream", hostKey)
+			_, err = e.etcdClient.Set(locUpKey, up, 0)
+			if err != nil {
+				log.WithFields(logrus.Fields{
+					"host":  host,
+					"key":   locKey,
+					"error": err,
+				}).Error("Error creating location upstream in etcd")
+				return
+			}
+			break
+		}
+	case "die", "destroy", "stop":
+		// since die is called upon stop as well, only log if "die"
+		if event.Status == "die" {
+			log.WithFields(logrus.Fields{
+				"host": host,
+			}).Info("Removing endpoint for host")
+		}
+		_, err = e.etcdClient.RawDelete(epKey, true, true)
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"host":  host,
+				"key":   upKey,
+				"error": err,
+			}).Error("Error removing endpoint from etcd")
+			return
+		}
+		// check for any other endpoints and break if they exist
+		r, er := e.etcdClient.Get(ep, true, true)
+		if er != nil {
+			log.WithFields(logrus.Fields{
+				"host":  host,
+				"key":   ep,
+				"error": er,
+			}).Error("Error checking endpoint from etcd")
+			return
+		}
+		// if there are no more nodes, cleanup
+		if len(r.Node.Nodes) == 0 {
+			// if no more endpoints (all are gone) then remove upstream and host
+			_, err = e.etcdClient.RawDelete(upKey, true, true)
+			if err != nil {
+				log.WithFields(logrus.Fields{
+					"host":  host,
+					"key":   upKey,
+					"error": err,
+				}).Error("Error removing upstream from etcd")
+			}
+			log.WithFields(logrus.Fields{
+				"host": host,
+			}).Info("Removing host")
+			// remove host
+			_, err := e.etcdClient.RawDelete(hostKey, true, true)
+			if err != nil {
+				log.WithFields(logrus.Fields{
+					"host":  host,
+					"key":   hostKey,
+					"error": err,
+				}).Error("Error removing host from etcd")
+			}
+			return
 		}
 	}
 }

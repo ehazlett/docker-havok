@@ -57,8 +57,6 @@ Then run `curl foo.local` -- you should see "hello from go-static"
 * `-rate-limit-burst`: Set burst rate limit (default: 1)
 * `-rate-limit-var`: Variable for rate limiting (default: client.ip)
 * `-root-domain`: Domain that will be used for the containers (default: `local`)
-* `-root-subdomain`: Root level subdomain (i.e. www) - use this to automatically add a subdomain if using a root level domain (i.e.: `example.com` & `www.example.com`)
-* `-version`: Show version
 
 # Knowns
 
